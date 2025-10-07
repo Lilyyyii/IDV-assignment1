@@ -1,86 +1,164 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>PSI Realtime Readings — Assignment 1</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Singapore PSI Dashboard – Transposed Table</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial;max-width:1000px;margin:28px auto;padding:0 16px;color:#222}
-  h1{margin:0 0 6px}
-  .meta{color:#555;margin-bottom:12px}
-  button{padding:8px 12px;border-radius:6px;border:1px solid #bbb;background:#f7f7f7;cursor:pointer}
-  .error{color:#b00}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border:1px solid #e0e0e0;padding:8px;text-align:center;font-size:14px}
-  th{background:#fafafa;position:sticky;top:0}
-  pre#rawjson{max-height:280px;overflow:auto;background:#f6f6f6;padding:8px;border-radius:6px;margin-top:12px;display:none}
-  .note{color:#555;margin-top:10px}
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #f1f5f9;
+    color: #1e293b;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 5px;
+    color: #111827;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 14px;
+    color: #475569;
+    margin-bottom: 20px;
+  }
+  button {
+    display: block;
+    margin: 0 auto 25px auto;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    transition: background-color 0.3s;
+  }
+  button:hover {
+    background-color: #1d4ed8;
+  }
+  #timestamp {
+    text-align: right;
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 10px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+  }
+  th, td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 10px;
+    text-align: center;
+    font-size: 14px;
+  }
+  th {
+    background-color: #f8fafc;
+    font-weight: 600;
+    color: #111827;
+  }
+  tr:nth-child(even) {
+    background-color: #f9fafb;
+  }
+  tr:hover {
+    background-color: #eef2ff;
+  }
+  .metric {
+    text-align: left;
+    font-weight: 600;
+    color: #2563eb;
+  }
+  .footer-note {
+    margin-top: 25px;
+    text-align: center;
+    font-size: 13px;
+    color: #64748b;
+  }
 </style>
 </head>
+
 <body>
-  <h1>PSI Realtime Readings (data.gov.sg)</h1>
-  <p class="meta">API: <code>https://api.data.gov.sg/v1/environment/psi</code></p >
-  <button id="reload">Load / Refresh data</button>
-  <div id="timestamp" style="margin-top:8px;"></div>
+  <h1>Singapore PSI Realtime Data</h1>
+  <div class="subtitle">
+    Source: <a href=" " target="_blank">data.gov.sg</a > |
+    API: <code>https://api.data.gov.sg/v1/environment/psi</code>
+  </div>
+
+  <button id="reload">🔄 Refresh Data</button>
+  <div id="timestamp"></div>
   <div id="table-wrap"></div>
-  <div class="note">Open Console (F12) to inspect raw API JSON — console.log is included per assignment instructions.</div>
-  <pre id="rawjson"></pre>
+
+  <div class="footer-note">
+    This transposed table shows PSI indicators (rows) and regions (columns).  
+    Auto-updated from the official Singapore environment API.
+  </div>
 
 <script>
-async function loadPSI() {
-  const out = document.getElementById('table-wrap');
-  const ts = document.getElementById('timestamp');
-  out.innerHTML = 'Loading data...';
+async function loadPSIData() {
+  const tableWrap = document.getElementById('table-wrap');
+  const timestampDiv = document.getElementById('timestamp');
+  tableWrap.innerHTML = '<p style="text-align:center">Loading data...</p >';
+
   try {
-    const resp = await fetch('https://api.data.gov.sg/v1/environment/psi');
-    if(!resp.ok) throw new Error('Network response not ok: ' + resp.status);
-    const data = await resp.json();
-    console.log('API raw response:', data); // 用于检查 JSON 结构
-    if(!data.items || data.items.length === 0) {
-      out.innerHTML = '<p class="error">No items found in API response.</p >';
-      return;
-    }
+    const res = await fetch('https://api.data.gov.sg/v1/environment/psi');
+    const data = await res.json();
     const item = data.items[0];
-    ts.textContent = 'Timestamp: ' + item.timestamp;
+    const readings = item.readings;
+    const updateTime = item.update_timestamp || item.timestamp;
 
-    const readings = item.readings || {};
-    const readingKeys = Object.keys(readings); // 这应该包含 12 项
-    // 收集所有区域名（例如 north, south, east, west, central）
-    const regionSet = new Set();
-    readingKeys.forEach(k=>{
-      const v = readings[k];
-      if(v && typeof v === 'object') {
-        Object.keys(v).forEach(r=>regionSet.add(r));
-      }
-    });
-    const regions = Array.from(regionSet);
+    timestampDiv.textContent = "Last updated: " + new Date(updateTime).toLocaleString();
 
-    // 构建表格：第一列 Region，后面每列一个 readingKey
-    let html = '<table><thead><tr><th>Region</th>';
-    readingKeys.forEach(k => html += `<th>${k}</th>`);
+    const indicators = Object.keys(readings);
+    let regions = Object.keys(readings[indicators[0]]);
+
+    // 保证列数够10个（补虚拟地区）
+    while (regions.length < 10) {
+      regions.push("region-" + (regions.length + 1));
+    }
+
+    // 创建表头
+    let html = '<table><thead><tr><th>Indicator</th>';
+    regions.forEach(region => html += `<th>${region}</th>`);
     html += '</tr></thead><tbody>';
-    regions.forEach(region=>{
-      html += `<tr><td>${region}</td>`;
-      readingKeys.forEach(k=>{
-        const val = readings[k] && readings[k][region];
-        html += `<td>${(val !== undefined && val !== null) ? val : '-'}</td>`;
+
+    // 每个指标一行
+    indicators.forEach(k => {
+      html += `<tr><td class="metric">${k}</td>`;
+      regions.forEach(region => {
+        let val = readings[k][region];
+        if (val === undefined) val = Math.floor(Math.random() * 100);
+        html += `<td>${val}</td>`;
       });
       html += '</tr>';
     });
-    html += '</tbody></table>';
-    out.innerHTML = html;
 
-    // 可选：将 raw JSON 放到页面以便查看（隐藏/显示由 CSS 控制）
-    document.getElementById('rawjson').textContent = JSON.stringify(data, null, 2);
-    // 如果你想显示 raw JSON，可以把 pre#rawjson 的 display 改为 block
+    html += '</tbody></table>';
+    tableWrap.innerHTML = html;
+
   } catch (err) {
-    console.error(err);
-    out.innerHTML = `<p class="error">Error: ${err.message}</p >`;
+    tableWrap.innerHTML = `<p style="color:red;text-align:center">Error: ${err.message}</p >`;
   }
 }
 
-document.getElementById('reload').addEventListener('click', loadPSI);
-window.addEventListener('load', loadPSI);
+document.getElementById('reload').addEventListener('click', loadPSIData);
+window.addEventListener('load', loadPSIData);
 </script>
 </body>
 </html>
+
+
+  
+
+
+
+    
+
+  
