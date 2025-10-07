@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PSI Realtime Readings — Assignment 1</title>
+<style>
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial;max-width:1000px;margin:28px auto;padding:0 16px;color:#222}
+  h1{margin:0 0 6px}
+  .meta{color:#555;margin-bottom:12px}
+  button{padding:8px 12px;border-radius:6px;border:1px solid #bbb;background:#f7f7f7;cursor:pointer}
+  .error{color:#b00}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border:1px solid #e0e0e0;padding:8px;text-align:center;font-size:14px}
+  th{background:#fafafa;position:sticky;top:0}
+  pre#rawjson{max-height:280px;overflow:auto;background:#f6f6f6;padding:8px;border-radius:6px;margin-top:12px;display:none}
+  .note{color:#555;margin-top:10px}
+</style>
+</head>
+<body>
+  <h1>PSI Realtime Readings (data.gov.sg)</h1>
+  <p class="meta">API: <code>https://api.data.gov.sg/v1/environment/psi</code></p >
+  <button id="reload">Load / Refresh data</button>
+  <div id="timestamp" style="margin-top:8px;"></div>
+  <div id="table-wrap"></div>
+  <div class="note">Open Console (F12) to inspect raw API JSON — console.log is included per assignment instructions.</div>
+  <pre id="rawjson"></pre>
+
+<script>
+async function loadPSI() {
+  const out = document.getElementById('table-wrap');
+  const ts = document.getElementById('timestamp');
+  out.innerHTML = 'Loading data...';
+  try {
+    const resp = await fetch('https://api.data.gov.sg/v1/environment/psi');
+    if(!resp.ok) throw new Error('Network response not ok: ' + resp.status);
+    const data = await resp.json();
+    console.log('API raw response:', data); // 用于检查 JSON 结构
+    if(!data.items || data.items.length === 0) {
+      out.innerHTML = '<p class="error">No items found in API response.</p >';
+      return;
+    }
+    const item = data.items[0];
+    ts.textContent = 'Timestamp: ' + item.timestamp;
+
+    const readings = item.readings || {};
+    const readingKeys = Object.keys(readings); // 这应该包含 12 项
+    // 收集所有区域名（例如 north, south, east, west, central）
+    const regionSet = new Set();
+    readingKeys.forEach(k=>{
+      const v = readings[k];
+      if(v && typeof v === 'object') {
+        Object.keys(v).forEach(r=>regionSet.add(r));
+      }
+    });
+    const regions = Array.from(regionSet);
+
+    // 构建表格：第一列 Region，后面每列一个 readingKey
+    let html = '<table><thead><tr><th>Region</th>';
+    readingKeys.forEach(k => html += `<th>${k}</th>`);
+    html += '</tr></thead><tbody>';
+    regions.forEach(region=>{
+      html += `<tr><td>${region}</td>`;
+      readingKeys.forEach(k=>{
+        const val = readings[k] && readings[k][region];
+        html += `<td>${(val !== undefined && val !== null) ? val : '-'}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    out.innerHTML = html;
+
+    // 可选：将 raw JSON 放到页面以便查看（隐藏/显示由 CSS 控制）
+    document.getElementById('rawjson').textContent = JSON.stringify(data, null, 2);
+    // 如果你想显示 raw JSON，可以把 pre#rawjson 的 display 改为 block
+  } catch (err) {
+    console.error(err);
+    out.innerHTML = `<p class="error">Error: ${err.message}</p >`;
+  }
+}
+
+document.getElementById('reload').addEventListener('click', loadPSI);
+window.addEventListener('load', loadPSI);
+</script>
+</body>
+</html>
